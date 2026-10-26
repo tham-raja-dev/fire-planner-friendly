@@ -34,6 +34,25 @@ test("details scroller does not establish a fixed-position containing block", ()
   assert.match(css, /\.sticky-footer\s*\{[^}]*position\s*:\s*fixed/);
 });
 
+test("app and fixed overlays stay responsive through 500px", () => {
+  assert.match(css, /--app-max-width:\s*500px/);
+  for (const selector of [
+    "mobile-app",
+    "sticky-footer",
+    "bottom-nav",
+    "bottom-sheet",
+    "wizard-progress",
+    "wizard-footer",
+    "scenario-sheet",
+  ]) {
+    assert.match(
+      css,
+      new RegExp(`\\.${selector}\\s*\\{[^}]*width:\\s*min\\([^;]*var\\(--app-max-width\\)`),
+    );
+  }
+  assert.doesNotMatch(css, /(?:width|min-width|max-width):\s*[^;{}]*412px/);
+});
+
 test("no-retirement results use the three economy states and runout summary", () => {
   assert.match(page, /useState<Outlook>\("cautious"\)/);
   assert.match(page, /Bad economy/);

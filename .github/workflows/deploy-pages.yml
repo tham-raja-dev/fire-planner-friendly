@@ -30,7 +30,7 @@ jobs:
       - name: Build static site
         run: npm run build
         env:
-          PAGES_BASE_PATH: /fire-planner
+          PAGES_BASE_PATH: /fire-planner-friendly
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

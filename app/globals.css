@@ -4,6 +4,7 @@
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
 :root {
+  --app-max-width: 500px;
   --canvas: #111113; --surface: #1b1b1f; --surface-raised: #232329;
   --input: #29292f; --border: #323238; --border-strong: #45454d;
   --text: #f1f1ed; --text-secondary: #a4a4ac; --text-muted: #777780;
@@ -19,7 +20,7 @@ button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
 .site-shell { height: 100svh; display: grid; place-items: start center; overflow: hidden; overscroll-behavior: none; background: #0d0d0f; }
-.mobile-app { position: relative; width: min(100%, 412px); height: 100svh; min-height: 100svh; overflow: hidden; isolation: isolate; background: var(--canvas); }
+.mobile-app { position: relative; width: min(100%, var(--app-max-width)); height: 100svh; min-height: 100svh; overflow: hidden; isolation: isolate; background: var(--canvas); }
 .start-screen, .details-screen, .loading-screen, .result-screen { min-height: 100svh; animation: appear .24s ease both; }
 .start-screen { position: relative; height: 100svh; min-height: 0; overflow: hidden; }
 @keyframes appear { from { opacity: 0; transform: translateY(4px); } }
@@ -91,7 +92,7 @@ button { cursor: pointer; }
 .detail-summary-card span, .detail-summary-card b { font-size: 16px; }
 .detail-summary-card b { color: var(--text); font-weight: 600; }
 .detail-summary-card svg { color: var(--primary); }
-.sticky-footer { position: fixed; z-index: 5; left: 50%; right: auto; bottom: 0; width: min(100vw, 412px); transform: translateX(-50%); padding: 10px 12px 14px; background: linear-gradient(to top, var(--canvas) 78%, transparent); }
+.sticky-footer { position: fixed; z-index: 5; left: 50%; right: auto; bottom: 0; width: min(100vw, var(--app-max-width)); transform: translateX(-50%); padding: 10px 12px 14px; background: linear-gradient(to top, var(--canvas) 78%, transparent); }
 
 .projection-chart { position: relative; height: 415px; padding: 53px 7px 4px; overflow: hidden; background: var(--surface); }
 .projection-chart.compact { height: 60px; padding: 10px 0; }
@@ -163,13 +164,13 @@ button { cursor: pointer; }
 .planner-tabs button { position: relative; min-width: 0; width: 100%; padding: 0 8px; border: 0; background: none; color: var(--text-muted); font-size: 14px; line-height: 20px; font-weight: 500; text-align: center; white-space: nowrap; }
 .planner-tabs button.active { color: var(--focus); }
 .planner-tabs button.active::after { content: ""; position: absolute; right: 0; bottom: -1px; left: 0; height: 1px; background: var(--violet); }
-.bottom-nav { position: fixed; z-index: 4; left: 50%; right: auto; bottom: 0; width: min(100vw, 412px); height: 64px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; padding: 10px 12px; background: var(--canvas); }
+.bottom-nav { position: fixed; z-index: 4; left: 50%; right: auto; bottom: 0; width: min(100vw, var(--app-max-width)); height: 64px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; padding: 10px 12px; background: var(--canvas); }
 .bottom-nav button { display: flex; justify-content: center; align-items: center; gap: 10px; border: 0; background: var(--surface-raised); color: var(--violet); font-size: 16px; line-height: 22px; font-weight: 600; }
 .bottom-nav .share-main { border: 1px solid #424249; border-radius: 8px; box-shadow: 0 -1px 0 rgba(255,255,255,.32), inset 0 1px 0 rgba(255,255,255,.055), inset 0 -4px 0 rgba(0,0,0,.22), 0 5px 12px rgba(0,0,0,.28); }
 .bottom-nav .more-action { background: transparent; }
 
 .sheet-backdrop { position: fixed; z-index: 20; inset: 0; display: flex; justify-content: center; align-items: flex-end; background: rgba(0,0,0,.66); }
-.bottom-sheet { width: min(100%, 412px); max-height: 88svh; overflow-y: auto; padding: 8px 16px 24px; border-radius: 16px 16px 0 0; background: var(--surface); box-shadow: 0 -16px 40px rgba(0,0,0,.35); animation: sheet-up .24s ease both; }
+.bottom-sheet { width: min(100%, var(--app-max-width)); max-height: 88svh; overflow-y: auto; padding: 8px 16px 24px; border-radius: 16px 16px 0 0; background: var(--surface); box-shadow: 0 -16px 40px rgba(0,0,0,.35); animation: sheet-up .24s ease both; }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 .sheet-handle { width: 40px; height: 4px; margin: 0 auto 18px; border-radius: 99px; background: var(--border-strong); }
 .sheet-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -306,7 +307,7 @@ button { cursor: pointer; }
 /* Figma onboarding flow */
 .wizard-screen { position: relative; height: 100svh; overflow-y: auto; padding: 62px 16px 92px; background: var(--canvas); scrollbar-width: none; }
 .wizard-screen::-webkit-scrollbar { display: none; }
-.wizard-progress { position: fixed; z-index: 5; top: 0; left: 50%; width: min(100vw, 412px); height: 62px; transform: translateX(-50%); display: block; padding: 16px 16px 0; overflow-x: auto; overflow-y: hidden; background: var(--canvas); scrollbar-width: none; scroll-behavior: smooth; }
+.wizard-progress { position: fixed; z-index: 5; top: 0; left: 50%; width: min(100vw, var(--app-max-width)); height: 62px; transform: translateX(-50%); display: block; padding: 16px 16px 0; overflow-x: auto; overflow-y: hidden; background: var(--canvas); scrollbar-width: none; scroll-behavior: smooth; }
 .wizard-progress::-webkit-scrollbar { display: none; }
 .wizard-progress-track { width: max-content; min-width: 100%; height: 30px; display: flex; align-items: center; border: 1px solid #29292f; border-radius: 4px; overflow: visible; }
 .wizard-progress-trigger { position: relative; z-index: var(--step-layer); flex: 0 0 auto; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; line-height: 20px; white-space: nowrap; }
@@ -374,7 +375,7 @@ button { cursor: pointer; }
 .dependants-step .dependant-card .support-years-field { min-height: 24px; grid-template-rows: auto; row-gap: 0; }
 .dependants-step .dependant-card .support-years-field .number-value { font-size: 18px; line-height: 26px; }
 .dependants-step .dependant-card .support-years-field .value-slider { display: none; }
-.wizard-footer { position: fixed; z-index: 6; left: 50%; bottom: 0; width: min(100vw, 412px); height: 76px; transform: translateX(-50%); display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 12px; background: var(--canvas); }
+.wizard-footer { position: fixed; z-index: 6; left: 50%; bottom: 0; width: min(100vw, var(--app-max-width)); height: 76px; transform: translateX(-50%); display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 12px; background: var(--canvas); }
 .wizard-footer .primary-button { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .wizard-back { height: 44px; display: grid; place-items: center; border: 1px solid #34343b; border-radius: 4px; background: #232329; color: var(--primary); }
 .wizard-back:disabled { opacity: .48; }
@@ -440,7 +441,7 @@ button { cursor: pointer; }
 .runout-bottom-nav { grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding: 12px 16px; }
 .runout-bottom-nav .share-main { width: 44px; height: 44px; border: 1px solid #34343b; border-radius: 4px; background: #232329; color: var(--primary); box-shadow: 0 -1px 0 rgba(255,255,255,.2), inset 0 -4px 0 rgba(0,0,0,.12); }
 .scenario-backdrop { background: rgba(0,0,0,.72); }
-.scenario-sheet { width: min(100%, 412px); height: calc(100svh - 101px); overflow-y: auto; padding: 8px 16px 16px; border-radius: 6px 6px 0 0; background: var(--canvas); animation: sheet-up .24s ease both; }
+.scenario-sheet { width: min(100%, var(--app-max-width)); height: calc(100svh - 101px); overflow-y: auto; padding: 8px 16px 16px; border-radius: 6px 6px 0 0; background: var(--canvas); animation: sheet-up .24s ease both; }
 .scenario-sheet .sheet-handle { margin-bottom: 19px; }
 .scenario-sheet > h2 { margin: 0 0 11px; font-size: 20px; line-height: 28px; font-weight: 500; }
 .scenario-sheet > p { max-width: 380px; margin: 0; color: var(--text-muted); font-size: 14px; line-height: 20px; }
@@ -460,7 +461,7 @@ button { cursor: pointer; }
 .know-more { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--primary); font-size: 14px; line-height: 24px; font-weight: 600; }
 .scenario-done { min-height: 45px; margin-top: 12px; color: var(--primary); }
 
-@media (min-width: 413px) {
+@media (min-width: 501px) {
   .mobile-app { box-shadow: 0 0 0 1px var(--border), 0 24px 70px rgba(0,0,0,.45); }
 }
 

@@ -32,6 +32,7 @@ const NEW_SAVINGS_RETURN = 0.04;
 const POST_RETIREMENT_RETURN = 0.07;
 const INFLATION = 0.06;
 const OUTLOOKS = ["cautious", "typical", "optimistic"] as const;
+const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`;
 const outlookLabel = (value: Outlook) => value === "cautious" ? "Bad economy" : value === "typical" ? "Average economy" : "Good economy";
 const ECONOMY_OPTIONS: { value: Outlook; label: string }[] = [
   { value: "cautious", label: "In bad economy" },
@@ -40,13 +41,13 @@ const ECONOMY_OPTIONS: { value: Outlook; label: string }[] = [
 ];
 const ECONOMY_ICON_ASSETS: Record<Outlook, Record<Outlook, string>> = {
   cautious: {
-    cautious: "/economy-bad-active.svg", typical: "/economy-average-inactive-bad.svg", optimistic: "/economy-good-inactive-bad.svg",
+    cautious: assetPath("/economy-bad-active.svg"), typical: assetPath("/economy-average-inactive-bad.svg"), optimistic: assetPath("/economy-good-inactive-bad.svg"),
   },
   typical: {
-    cautious: "/economy-bad-inactive-average.svg", typical: "/economy-average-active.svg", optimistic: "/economy-good-inactive-average.svg",
+    cautious: assetPath("/economy-bad-inactive-average.svg"), typical: assetPath("/economy-average-active.svg"), optimistic: assetPath("/economy-good-inactive-average.svg"),
   },
   optimistic: {
-    cautious: "/economy-bad-inactive-good.svg", typical: "/economy-average-inactive-good.svg", optimistic: "/economy-good-active.svg",
+    cautious: assetPath("/economy-bad-inactive-good.svg"), typical: assetPath("/economy-average-inactive-good.svg"), optimistic: assetPath("/economy-good-active.svg"),
   },
 };
 const RATE_KEYS: RateKey[] = ["mutualFunds", "stocks", "fixedDeposits", "realEstate", "savings", "inflation"];
@@ -407,7 +408,7 @@ function EconomyTabs({ value, onChange, onHelp }: { value: Outlook; onChange: (v
       </button>)}
     </div>
     <button className="economy-help" aria-label="About economy scenarios" onClick={onHelp}>
-      <Image src="/help-outline.svg" width={24} height={24} alt="" />
+      <Image src={assetPath("/help-outline.svg")} width={24} height={24} alt="" />
     </button>
   </div>;
 }
@@ -415,8 +416,8 @@ function EconomyTabs({ value, onChange, onHelp }: { value: Outlook; onChange: (v
 type WizardStepPosition = "Start" | "Middle" | "End";
 function WizardProgressStep({ number, label, state, position }: { number: number; label: string; state: "Active" | "Default"; position: WizardStepPosition }) {
   const active = state === "Active";
-  const leadingAsset = active ? "/step-notch-active.svg" : "/step-notch-default.svg";
-  const trailingAsset = active ? "/step-chevron-active.svg" : "/step-chevron-default.svg";
+  const leadingAsset = assetPath(active ? "/step-notch-active.svg" : "/step-notch-default.svg");
+  const trailingAsset = assetPath(active ? "/step-chevron-active.svg" : "/step-chevron-default.svg");
   return <span className={`wizard-progress-step ${active ? "active" : "default"} ${position.toLowerCase()}`}>
     {position !== "Start" && <span className="wizard-step-divider leading" aria-hidden="true"><Image src={leadingAsset} alt="" width={4} height={28} /></span>}
     <span className={`wizard-progress-step-content ${position.toLowerCase()}`}>
@@ -874,7 +875,7 @@ export default function Home() {
                     const age = scenarioRetirementAge ?? Math.min(Math.max(details.age, 35), 70);
                     setRecommendationsLoading(true); setTargetProjection(null); setTargetAge(age); setSelectedAge(age);
                     setSheet("retirement");
-                  }}><Image src="/tune.svg" width={20} height={20} alt="" />{cannotRetire ? "Set retirement age" : "Change age"}</button>
+                  }}><Image src={assetPath("/tune.svg")} width={20} height={20} alt="" />{cannotRetire ? "Set retirement age" : "Change age"}</button>
                 </section>
                 <h2 className="age-breakdown-title runout-breakdown-title">Age wise breakdown of your finances</h2>
                 <section className="runout-chart-card" aria-label="Age wise breakdown of your finances">
@@ -901,7 +902,7 @@ export default function Home() {
               </>}
             </section>
             <nav className={`bottom-nav ${cannotRetire ? "runout-bottom-nav" : ""}`} aria-label="Plan actions">
-              <button className="share-main" aria-label="Edit details" onClick={() => { setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}>{cannotRetire ? <Image src="/edit.svg" width={24} height={24} alt="" /> : "Edit details"}</button>
+              <button className="share-main" aria-label="Edit details" onClick={() => { setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}>{cannotRetire ? <Image src={assetPath("/edit.svg")} width={24} height={24} alt="" /> : "Edit details"}</button>
               <button className="export-main primary-button" onClick={exportCsv}>Export</button>
             </nav>
           </>}
