@@ -9,6 +9,18 @@ test("details flow does not render the retired estimate tabs", () => {
   assert.doesNotMatch(page, /<PlannerTabs\b/);
 });
 
+test("wizard progress uses the six Figma step variants and local divider assets", () => {
+  assert.match(page, /function WizardProgressStep/);
+  assert.match(page, /position: WizardStepPosition/);
+  assert.match(page, /state: "Active" \| "Default"/);
+  assert.match(page, /wizard-progress-track/);
+  for (const asset of ["step-chevron-active.svg", "step-chevron-default.svg", "step-notch-active.svg", "step-notch-default.svg"]) {
+    assert.match(page, new RegExp(asset.replaceAll(".", "\\.")));
+  }
+  assert.match(css, /\.wizard-progress-track\s*\{[^}]*border:\s*1px solid/);
+  assert.match(css, /\.wizard-progress-trigger\s*\+\s*\.wizard-progress-trigger\s*\{[^}]*margin-left:\s*-4px/);
+});
+
 test("details popover includes the complete navigation and supplied section artwork", () => {
   for (const label of ["loans", "dependencies"]) assert.match(page, new RegExp(`>${label}<`));
   for (const asset of ["details-investments.svg", "details-income.svg", "details-expenditure.svg"]) assert.match(page, new RegExp(asset.replace(".", "\\.")));
@@ -22,11 +34,24 @@ test("details scroller does not establish a fixed-position containing block", ()
   assert.match(css, /\.sticky-footer\s*\{[^}]*position\s*:\s*fixed/);
 });
 
-test("new results flow defaults to cautious and uses the approved labels", () => {
+test("no-retirement results use the three economy states and runout summary", () => {
   assert.match(page, /useState<Outlook>\("cautious"\)/);
-  assert.match(page, /"Moderate"/);
-  assert.match(page, />More details</);
-  assert.match(page, />Change age</);
+  assert.match(page, /Bad economy/);
+  assert.match(page, /Average economy/);
+  assert.match(page, /Good economy/);
+  assert.match(page, /function EconomyTabs/);
+  assert.match(page, /financesRunOutBy/);
+  assert.match(page, /scenarioRetirementAges\[outlook\]/);
+  assert.match(page, /Retirement age/);
+  assert.match(page, /Your finances will run out by/);
+  assert.match(page, /runout/);
+  assert.doesNotMatch(page, /Projection scenario/);
+  assert.match(page, /new ResizeObserver\(measure\)/);
+  assert.match(page, /plot\.clientHeight/);
+  assert.match(css, /\.loading-screen\.no-retirement-result\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(css, /\.runout-chart-card\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0/);
+  assert.match(css, /\.runout-plot\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0/);
+  assert.match(page, /"Change age"/);
 });
 
 test("scenario sheet renders all 100 sampled futures and its complete explanation", () => {
@@ -91,7 +116,7 @@ test("result actions preserve equal widths and a primary export CTA", () => {
 });
 
 test("undetermined result and retirement-age sheet follow the approved copy and alternative layout", () => {
-  assert.match(page, /Retirement age is beyond reach/);
+  assert.match(page, /Your finances will run out by/);
   assert.match(page, /Set retirement age/);
   assert.match(page, /You need to bring in these changes/);
   assert.match(page, /Increase current investments to/);

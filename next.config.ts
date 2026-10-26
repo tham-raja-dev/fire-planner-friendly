@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   basePath,
   assetPrefix: basePath,
   images: { unoptimized: true },
+  devIndicators: false,
 };
 
 export default nextConfig;

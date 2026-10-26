@@ -36,6 +36,11 @@ test("each outlook exposes the realized rates used by its coherent path", () => 
       assert.ok(summary.min >= model.SIMULATION_RATE_BOUNDS[key].min);
       assert.ok(summary.max <= model.SIMULATION_RATE_BOUNDS[key].max);
     }
+    const scenarioAge = result.scenarioRetirementAges[outlook];
+    if (scenarioAge !== null) {
+      assert.ok(scenarioAge >= details.age);
+      assert.equal(model.financesRunOutBy(result.retirementPaths[outlook], details.age).depleted, false);
+    }
   }
 });
 
@@ -48,10 +53,22 @@ test("each outlook is one coherent representative future", () => {
     ],
   }));
   const paths = model.representativePaths(runs);
-  assert.deepEqual(paths.cautious, runs[1].points);
+  assert.deepEqual(paths.cautious, runs[0].points);
   assert.deepEqual(paths.typical, runs[4].points);
-  assert.deepEqual(paths.optimistic, runs[7].points);
+  assert.deepEqual(paths.optimistic, runs[9].points);
   for (const path of Object.values(paths)) assert.ok(runs.some((run) => run.points === path));
+});
+
+test("runout summary returns the first shortfall age and calendar year", () => {
+  const result = model.financesRunOutBy([
+    { age: 34, corpus: 10_000, expense: 10_000, requestedExpense: 10_000 },
+    { age: 35, corpus: 0, expense: 2_000, requestedExpense: 12_000 },
+    { age: 36, corpus: 0, expense: 0, requestedExpense: 12_000 },
+  ], 34, 2026);
+  assert.deepEqual(result, { age: 35, year: 2027, depleted: true });
+  assert.deepEqual(model.financesRunOutBy([
+    { age: 34, corpus: 10_000, expense: 10_000, requestedExpense: 10_000 },
+  ], 34, 2026), { age: 34, year: 2026, depleted: false });
 });
 
 test("a reported retirement age meets the 85 percent threshold", () => {
@@ -60,9 +77,33 @@ test("a reported retirement age meets the 85 percent threshold", () => {
   assert.ok(result.successRate >= 0.85);
 });
 
+test("each economy has its own retirement age and matching sustainable projection", () => {
+  const result = model.calculatePlan(details, dependents, loan, 42);
+  assert.notEqual(result.scenarioRetirementAges.cautious, result.scenarioRetirementAges.optimistic);
+  for (const outlook of ["cautious", "typical", "optimistic"]) {
+    const age = result.scenarioRetirementAges[outlook];
+    if (age !== null) {
+      assert.equal(result.retirementPaths[outlook][0].age, details.age);
+      assert.equal(model.financesRunOutBy(result.retirementPaths[outlook], details.age).depleted, false);
+    }
+  }
+});
+
 test("zero income does not invent a future retirement age", () => {
   const result = model.calculatePlan({ ...details, monthlyIncome: 0, monthlySip: 0, mutualFunds: 100_000 }, dependents, loan, 42);
   assert.equal(result.retirementAge, null);
+});
+
+test("good economy shows its own sustainable retirement age when the overall threshold fails", () => {
+  const constrained = {
+    ...details, mutualFunds: 19_700_000, monthlySip: 120_000, stocks: 100_000,
+    fixedDeposits: 100_000, bankSavings: 100_000, monthlyIncome: 10_000, monthlyExpense: 120_000,
+  };
+  const result = model.calculatePlan(constrained, dependents, loan, 731942);
+  assert.equal(result.retirementAge, null);
+  assert.equal(result.scenarioRetirementAges.cautious, null);
+  assert.equal(result.scenarioRetirementAges.optimistic, constrained.age);
+  assert.equal(model.financesRunOutBy(result.retirementPaths.optimistic, constrained.age).depleted, false);
 });
 
 test("withdrawals exhaust savings before the next asset bucket", () => {

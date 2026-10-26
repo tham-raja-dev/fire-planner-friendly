@@ -1,7 +1,7 @@
 export const LIFE_EXPECTANCY = 90;
 export const SIMULATION_COUNT = 1000;
 export const SUCCESS_THRESHOLD = 0.85;
-export const MODEL_VERSION = "2026-09-mc-v3";
+export const MODEL_VERSION = "2026-10-mc-v4";
 
 export type Details = {
   age: number; mutualFunds: number; monthlySip: number; stocks: number;
@@ -21,6 +21,7 @@ export type Recommendation = {
 export type SimulationResult = {
   retirementAge: number | null; successRate: number;
   paths: Record<Outlook, YearPoint[]>; rateSummaries: Record<Outlook, RateSummary>;
+  scenarioRetirementAges: Record<Outlook, number | null>; retirementPaths: Record<Outlook, YearPoint[]>;
   samples: number[][]; expenseSamples: number[][]; sampleRateSummaries: RateSummary[]; seed: number;
 };
 
@@ -133,7 +134,12 @@ function successAt(details: Details, dependents: Dependents, loan: Loan, retirem
   return successes / matrix.length;
 }
 
-const percentileIndex: Record<Outlook, number> = { cautious: 0.20, typical: 0.50, optimistic: 0.80 };
+function earliestSustainableAge(details: Details, dependents: Dependents, loan: Loan, shocks: Shocks[]): number | null {
+  const candidates = details.monthlyIncome === 0 ? [details.age] : Array.from({ length: LIFE_EXPECTANCY - details.age }, (_, index) => details.age + index);
+  return candidates.find((age) => runPath(details, dependents, loan, age, shocks).success) ?? null;
+}
+
+const percentileIndex: Record<Outlook, number> = { cautious: 0, typical: 0.50, optimistic: 1 };
 function rankedRunIndices(runs: ReturnType<typeof runPath>[]) {
   return runs.map((run, index) => {
     const shortfall = run.points.find((point) => point.expense + 0.01 < point.requestedExpense);
@@ -159,6 +165,12 @@ export function representativePaths(runs: ReturnType<typeof runPath>[]): Record<
   const indices = representativeRunIndices(runs);
   const build = (outlook: Outlook) => runs[indices[outlook]].points;
   return { cautious: build("cautious"), typical: build("typical"), optimistic: build("optimistic") };
+}
+
+export function financesRunOutBy(path: YearPoint[], currentAge: number, currentYear = new Date().getFullYear()) {
+  const underfundedPoint = path.find((point) => point.expense + 0.01 < point.requestedExpense);
+  const age = underfundedPoint?.age ?? path.at(-1)?.age ?? currentAge;
+  return { age, year: currentYear + age - currentAge, depleted: underfundedPoint !== undefined };
 }
 
 function representativeRateSummaries(runs: ReturnType<typeof runPath>[], matrix: Shocks[][]): Record<Outlook, RateSummary> {
@@ -195,10 +207,21 @@ export function calculatePlan(details: Details, dependents: Dependents, loan: Lo
   const runs = matrix.map((shocks) => runPath(details, dependents, loan, chartAge, shocks));
   if (retirementAge === null) successRate = runs.filter((run) => run.success).length / runs.length;
   const ranked = rankedRunIndices(runs);
+  const representativeIndices = representativeRunIndices(runs);
+  const scenarioRetirementAges = Object.fromEntries((Object.keys(representativeIndices) as Outlook[]).map((outlook) => [
+    outlook,
+    earliestSustainableAge(details, dependents, loan, matrix[representativeIndices[outlook]]),
+  ])) as Record<Outlook, number | null>;
+  const retirementPaths = Object.fromEntries((Object.keys(representativeIndices) as Outlook[]).map((outlook) => {
+    const runIndex = representativeIndices[outlook];
+    const age = scenarioRetirementAges[outlook] ?? details.age;
+    return [outlook, runPath(details, dependents, loan, age, matrix[runIndex]).points];
+  })) as Record<Outlook, YearPoint[]>;
   const sampledIndices = Array.from({ length: 100 }, (_, index) => ranked[Math.round(index * (ranked.length - 1) / 99)]);
   const sampledRuns = sampledIndices.map((index) => runs[index]);
   return {
-    retirementAge, successRate, paths: representativePaths(runs), rateSummaries: representativeRateSummaries(runs, matrix), seed,
+    retirementAge, successRate, paths: representativePaths(runs), rateSummaries: representativeRateSummaries(runs, matrix),
+    scenarioRetirementAges, retirementPaths, seed,
     samples: sampledRuns.map((run) => run.points.map((point) => point.corpus)),
     expenseSamples: sampledRuns.map((run) => run.points.map((point) => point.expense)),
     sampleRateSummaries: sampledIndices.map((index) => rateSummaryForRun(runs[index], matrix[index])),
