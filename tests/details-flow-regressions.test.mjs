@@ -86,6 +86,65 @@ test("scenario sheet renders all 100 sampled futures and its complete explanatio
   assert.match(page, /scenario-rate-cards/);
 });
 
+test("scenario rates use tabs and runout chart selection replaces its hint", () => {
+  assert.match(page, /function ScenarioRangeTabs/);
+  assert.match(css, /\.scenario-ranges\s*\{[^}]*font-size:\s*14px/);
+  assert.match(page, /selectedRunoutPoint \? <>/);
+  assert.doesNotMatch(page, /className="runout-legend"/);
+  assert.doesNotMatch(page, /className="runout-age-axis"/);
+});
+
+test("runout chart contains its bars with padded selection coverage", () => {
+  assert.match(page, /runoutPlotHeight - 68/);
+  assert.doesNotMatch(page, /runoutLayout \? Math\.max\(1, corpusAreaHeight - 24\)/);
+  assert.doesNotMatch(page, /runoutLayout \? Math\.max\(1, expenseAreaHeight - 12\)/);
+  assert.match(css, /\.runout-plot\s*\{[^}]*padding:\s*32px 8px[^}]*overflow:\s*hidden/);
+  assert.match(css, /\.loading-screen\.result-screen \.projection-chart\.runout-plot\s*\{[^}]*padding:\s*32px 8px/);
+  assert.match(css, /\.runout-plot \.corpus-area \.bar-slot\.selected\s*\{[^}]*box-shadow:\s*0 -32px/);
+  assert.match(css, /\.runout-plot \.expense-area \.bar-slot\.selected\s*\{[^}]*box-shadow:\s*0 32px/);
+});
+
+test("runout summary shows only the primary age value", () => {
+  assert.doesNotMatch(page, /Age \$\{runout\.age\} · \$\{runout\.year\}/);
+  assert.doesNotMatch(page, /Beyond age \$\{runout\.age\}/);
+  assert.doesNotMatch(page, /In \$\{outlookLabel\(outlook\)\.toLowerCase\(\)\}/);
+  assert.doesNotMatch(css, /\.runout-age-row span/);
+});
+
+test("age selector centers clicked ages and exposes Figma arrow controls", () => {
+  assert.match(page, /function AgeWheel/);
+  assert.match(page, /scrollTo\(\{ top: \(boundedAge - minimumAge\) \* rowHeight, behavior: "smooth" \}\)/);
+  assert.match(page, /onClick=\{\(\) => selectAge\(value\)\}/);
+  assert.match(page, /scrollTargetAge\.current = boundedAge/);
+  assert.match(page, /aria-label="Select previous age"/);
+  assert.match(page, /aria-label="Select next age"/);
+  assert.doesNotMatch(page, /className="age-chart-glyph"/);
+  assert.match(css, /\.age-wheel-shell\s*\{[^}]*height:\s*587px/);
+  assert.match(css, /\.age-wheel-values\s*\{[^}]*padding:\s*249px 0/);
+  assert.match(css, /\.age-wheel-fade\s*\{[^}]*right:\s*16px[^}]*left:\s*16px/);
+  assert.match(css, /\.age-wheel-fade-top\s*\{[^}]*height:\s*139px/);
+  assert.match(css, /\.age-wheel-fade-bottom\s*\{[^}]*height:\s*192px/);
+});
+
+test("buttons and result copy use the unified action language", () => {
+  assert.match(css, /button\s*\{[^}]*border-radius:\s*4px/);
+  assert.match(css, /\.primary-button\s*\{[^}]*border-radius:\s*4px/);
+  assert.match(css, /\.secondary-action, \.wizard-back, \.bottom-nav \.share-main\s*\{[^}]*border-radius:\s*4px/);
+  assert.match(css, /\.bottom-nav\s*\{[^}]*height:\s*76px[^}]*padding:\s*16px/);
+  assert.match(css, /\.runout-bottom-nav\s*\{[^}]*padding:\s*16px/);
+  assert.match(page, /See my financial outlook/);
+  assert.match(page, /You can retire by/);
+  assert.doesNotMatch(page, /Find my retirement age/);
+  assert.doesNotMatch(page, />Retirement age</);
+});
+
+test("result actions do not change between economy scenarios", () => {
+  assert.match(page, /<nav className="bottom-nav runout-bottom-nav" aria-label="Plan actions">/);
+  assert.doesNotMatch(page, /className=\{`bottom-nav \$\{cannotRetire/);
+  assert.match(page, /aria-label="Edit details"[\s\S]*?<Image src=\{assetPath\("\/edit\.svg"\)\}/);
+  assert.doesNotMatch(page, /cannotRetire \? <Image src=\{assetPath\("\/edit\.svg"\)/);
+});
+
 test("calculation loading screen follows the annotated Figma behavior", () => {
   for (const copy of ["Exploring different possible futures", "Testing changes in growth and inflation", "Checking how long your money could last", "Finding a retirement age that holds up"]) assert.match(page, new RegExp(copy));
   assert.match(page, /kind: "calculate"/);

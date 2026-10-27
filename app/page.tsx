@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, CirclePlus, Download, FileSpreadsheet, FileText, Landmark, Pencil, Share2, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CirclePlus, Download, FileSpreadsheet, FileText, Landmark, Pencil, Share2, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { BASE_RATES, LIFE_EXPECTANCY, MODEL_VERSION, financesRunOutBy, projectScenario, simulationRateFrames } from "@/lib/fire-model";
 import type { Outlook, RateKey, Recommendation, SimulationResult, YearPoint } from "@/lib/fire-model";
 import expenditureIcon from "@/public/details-expenditure.svg";
@@ -188,38 +188,59 @@ function RangeField({ label, value, onChange, min, max, step = 1000, prefix = "�
 function AgeWheel({ age, onChange }: { age: number; onChange: (age: number) => void }) {
   const wheelRef = useRef<HTMLDivElement>(null);
   const initialAge = useRef(age);
+  const scrollTargetAge = useRef<number | null>(null);
   const minimumAge = 18;
   const maximumAge = 70;
   const rowHeight = 88;
   useLayoutEffect(() => {
     if (wheelRef.current) wheelRef.current.scrollTop = (initialAge.current - minimumAge) * rowHeight;
   }, []);
-  return <div
-    ref={wheelRef}
-    className="age-wheel"
-    role="spinbutton"
-    aria-label="Your age"
-    aria-valuemin={minimumAge}
-    aria-valuemax={maximumAge}
-    aria-valuenow={age}
-    tabIndex={0}
-    onScroll={(event) => {
-      const nextAge = Math.min(maximumAge, Math.max(minimumAge, minimumAge + Math.round(event.currentTarget.scrollTop / rowHeight)));
-      if (nextAge !== age) onChange(nextAge);
-    }}
-    onKeyDown={(event) => {
-      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-        event.preventDefault();
-        const nextAge = Math.min(maximumAge, Math.max(minimumAge, age + (event.key === "ArrowUp" ? -1 : 1)));
-        if (wheelRef.current) wheelRef.current.scrollTop = (nextAge - minimumAge) * rowHeight;
-      }
-    }}
-  >
-    <div className="age-wheel-fade age-wheel-fade-top" />
-    <div className="age-wheel-values" aria-hidden="true">
-      {Array.from({ length: maximumAge - minimumAge + 1 }, (_, index) => index + minimumAge).map((value) => <span className={`age-wheel-value ${age === value ? "selected" : ""}`} key={value}>{value}</span>)}
+  const selectAge = (nextAge: number) => {
+    const boundedAge = Math.min(maximumAge, Math.max(minimumAge, nextAge));
+    scrollTargetAge.current = boundedAge;
+    onChange(boundedAge);
+    wheelRef.current?.scrollTo({ top: (boundedAge - minimumAge) * rowHeight, behavior: "smooth" });
+  };
+  return <div className="age-wheel-shell">
+    <div
+      ref={wheelRef}
+      className="age-wheel"
+      role="listbox"
+      aria-label="Your age"
+      aria-activedescendant={`age-option-${age}`}
+      tabIndex={0}
+      onPointerDown={() => { scrollTargetAge.current = null; }}
+      onWheel={() => { scrollTargetAge.current = null; }}
+      onScroll={(event) => {
+        const nextAge = Math.min(maximumAge, Math.max(minimumAge, minimumAge + Math.round(event.currentTarget.scrollTop / rowHeight)));
+        if (scrollTargetAge.current !== null) {
+          if (nextAge === scrollTargetAge.current) scrollTargetAge.current = null;
+          else return;
+        }
+        if (nextAge !== age) onChange(nextAge);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault();
+          selectAge(age + (event.key === "ArrowUp" ? -1 : 1));
+        }
+      }}
+    >
+      <div className="age-wheel-values">
+        {Array.from({ length: maximumAge - minimumAge + 1 }, (_, index) => index + minimumAge).map((value) => <button
+          id={`age-option-${value}`}
+          className={`age-wheel-value ${age === value ? "selected" : ""}`}
+          key={value}
+          role="option"
+          aria-selected={age === value}
+          onClick={() => selectAge(value)}
+        >{value}</button>)}
+      </div>
     </div>
+    <div className="age-wheel-fade age-wheel-fade-top" />
     <div className="age-wheel-fade age-wheel-fade-bottom" />
+    <button className="age-wheel-arrow age-wheel-arrow-up" aria-label="Select previous age" disabled={age === minimumAge} onClick={() => selectAge(age - 1)}><ChevronUp size={24} /></button>
+    <button className="age-wheel-arrow age-wheel-arrow-down" aria-label="Select next age" disabled={age === maximumAge} onClick={() => selectAge(age + 1)}><ChevronDown size={24} /></button>
   </div>;
 }
 
@@ -320,12 +341,14 @@ function ProjectionChart({ details, dependents, loan, retirementAge, scenario, s
     return values[Math.floor((values.length - 1) * .95)] ?? 0;
   }) : [];
   const maxExpense = scaleDomain?.maxExpense ?? Math.max(...data.map((item) => item.expense), ...outcomeExpenseScaleValues, 1);
-  const plotHeight = compact ? 40 : loading ? 344 : teaser ? 512 : showOutcomes ? 387 : runoutLayout ? Math.max(120, runoutPlotHeight - 4) : 358;
+  // The runout chart reserves 32px above and below its bars. Account for that
+  // space and the 4px zero-line gap so both halves stay inside the card.
+  const plotHeight = compact ? 40 : loading ? 344 : teaser ? 512 : showOutcomes ? 387 : runoutLayout ? Math.max(120, runoutPlotHeight - 68) : 358;
   const pixelsPerRupee = plotHeight / (maxCorpus + maxExpense);
   const corpusAreaHeight = runoutLayout ? Math.round(plotHeight * .78) : resultLayout ? 260 : loading ? 260 : showOutcomes ? 280 : maxCorpus * pixelsPerRupee;
   const expenseAreaHeight = runoutLayout ? plotHeight - corpusAreaHeight : resultLayout ? 84 : loading ? 84 : showOutcomes ? 107 : maxExpense * pixelsPerRupee;
-  const corpusPixelsPerRupee = runoutLayout ? Math.max(1, corpusAreaHeight - 24) / maxCorpus : resultLayout || loading || showOutcomes ? corpusAreaHeight / maxCorpus : pixelsPerRupee;
-  const expensePixelsPerRupee = runoutLayout ? Math.max(1, expenseAreaHeight - 12) / maxExpense : resultLayout || loading || showOutcomes ? expenseAreaHeight / maxExpense : pixelsPerRupee;
+  const corpusPixelsPerRupee = resultLayout || loading || showOutcomes || runoutLayout ? corpusAreaHeight / maxCorpus : pixelsPerRupee;
+  const expensePixelsPerRupee = resultLayout || loading || showOutcomes || runoutLayout ? expenseAreaHeight / maxExpense : pixelsPerRupee;
   // Use one rupee-to-pixel scale on both sides of the zero line. Otherwise,
   // similar cash and expense values can look unrelated when each side is
   // independently normalized.
@@ -335,7 +358,7 @@ function ProjectionChart({ details, dependents, loan, retirementAge, scenario, s
 
   return (
     <div ref={runoutLayout ? runoutPlotRef : undefined} className={`projection-chart ${compact ? "compact" : ""} ${teaser ? "teaser" : ""} ${loading ? "loading-chart" : ""} ${selected ? "has-selection" : ""} ${showOutcomes ? "outcome-mode" : ""} ${runoutLayout ? "runout-plot" : ""}`}>
-      {selected && !teaser && (
+      {selected && !teaser && !runoutLayout && (
         <div className="chart-tooltip" role="status">
           <strong>{selected.age}y</strong>
           <span>Cash at hand: <b>{selected.corpus > 0 ? chartMetric(selected.corpus) : "0"}</b></span>
@@ -410,6 +433,18 @@ function EconomyTabs({ value, onChange, onHelp }: { value: Outlook; onChange: (v
     <button className="economy-help" aria-label="About economy scenarios" onClick={onHelp}>
       <Image src={assetPath("/help-outline.svg")} width={24} height={24} alt="" />
     </button>
+  </div>;
+}
+
+function ScenarioRangeTabs({ value, onChange }: { value: Outlook; onChange: (value: Outlook) => void }) {
+  return <div className="scenario-range-tabs" role="tablist" aria-label="Rate range economy">
+    {ECONOMY_OPTIONS.map((option) => <button
+      key={option.value}
+      className={value === option.value ? "active" : ""}
+      role="tab"
+      aria-selected={value === option.value}
+      onClick={() => onChange(option.value)}
+    >{outlookLabel(option.value).replace(" economy", "")}</button>)}
   </div>;
 }
 
@@ -592,6 +627,9 @@ export default function Home() {
     ? calculatedPlan.retirementPaths[outlook]
     : undefined;
   const runout = financesRunOutBy(browsedProjection ?? [], details.age);
+  const selectedRunoutPoint = selectedAge === null
+    ? null
+    : browsedProjection?.find((point) => point.age === selectedAge) ?? null;
   const compactResultLayout = calculatedPlan !== null && (
     estimatedAge === null || Object.values(calculatedPlan.scenarioRetirementAges).some((age) => age === null)
   );
@@ -709,7 +747,7 @@ export default function Home() {
             <section className="start-copy">
               <h1>How long can your finances last?</h1>
               <p>See your finances run across multiple scenarios to determine how long does it last or by when can you retire</p>
-              <button className="primary-button" onClick={() => { setWizardStep(1); setScreen("details"); }}>Find my retirement age</button>
+              <button className="primary-button" onClick={() => { setWizardStep(1); setScreen("details"); }}>See my financial outlook</button>
             </section>
           </div>
         )}
@@ -730,7 +768,6 @@ export default function Home() {
             </nav>
             <section key={wizardStep} className={`wizard-content ${wizardStep === 1 ? "age-step" : wizardStep === 2 ? "investments-step" : wizardStep === 4 ? "dependants-step" : wizardStep === 5 ? "loan-step" : "form-icon-step"} ${wizardDirection}`}>
               {wizardStep === 1 && <>
-                <div className="age-chart-glyph" aria-hidden="true"><i /><i /><i /><i /></div>
                 <h1>What is your age?</h1>
                 <AgeWheel age={details.age} onChange={(age) => setDetails((current) => ({ ...current, age }))} />
               </>}
@@ -779,7 +816,7 @@ export default function Home() {
             </section>
             <footer className="wizard-footer">
               <button className="wizard-back" aria-label="Previous step" disabled={wizardStep === 1} onClick={() => goToWizardStep(wizardStep - 1)}><ChevronLeft size={22} /></button>
-              <button className="primary-button" onClick={() => wizardStep < 5 ? goToWizardStep(wizardStep + 1) : calculateRetirementAge()}>{wizardStep < 5 ? <>Next<ChevronRight size={21} /></> : "Find my retirement age"}</button>
+              <button className="primary-button" onClick={() => wizardStep < 5 ? goToWizardStep(wizardStep + 1) : calculateRetirementAge()}>{wizardStep < 5 ? <>Next<ChevronRight size={21} /></> : "See my financial outlook"}</button>
             </footer>
           </div>
         )}
@@ -852,7 +889,7 @@ export default function Home() {
                 {loan.balance || loan.emi ? <button className="detail-summary-card" onClick={() => setSheet("loan")}><span>Loans</span><b>{loan.balance.toLocaleString("en-IN")}</b><Pencil size={20} /></button> : <button onClick={() => setSheet("loan")}>Add Loans</button>}
               </div>
             </div>
-            <div className="sticky-footer"><button className="primary-button" onClick={calculateRetirementAge}>{editingDetails ? "Update my retirement age" : "Find my retirement age"}</button></div>
+            <div className="sticky-footer"><button className="primary-button" onClick={calculateRetirementAge}>{editingDetails ? "Update my financial outlook" : "See my financial outlook"}</button></div>
           </div>
         )}
 
@@ -866,10 +903,9 @@ export default function Home() {
               <EconomyTabs value={outlook} onChange={setOutlook} onHelp={() => setSheet("scenarios")} />
               {compactResultLayout ? <>
                 <section className="runout-summary">
-                  <h1>{cannotRetire ? runout.depleted ? "Your finances will run out by" : "Your finances last beyond" : "Retirement age"}</h1>
+                  <h1>{cannotRetire ? runout.depleted ? "Your finances will run out by" : "Your finances last beyond" : "You can retire by"}</h1>
                   <div className="runout-age-row">
                     <strong>{cannotRetire ? runout.age : scenarioRetirementAge}</strong>
-                    <span>{cannotRetire ? runout.depleted ? `Age ${runout.age} · ${runout.year}` : `Beyond age ${runout.age}` : `In ${outlookLabel(outlook).toLowerCase()}`}</span>
                   </div>
                   <button onClick={() => {
                     const age = scenarioRetirementAge ?? Math.min(Math.max(details.age, 35), 70);
@@ -879,18 +915,19 @@ export default function Home() {
                 </section>
                 <h2 className="age-breakdown-title runout-breakdown-title">Age wise breakdown of your finances</h2>
                 <section className="runout-chart-card" aria-label="Age wise breakdown of your finances">
-                  <div className="runout-chart-hint">Tap a bar below to view finances at that age.</div>
+                  <div className={`runout-chart-hint ${selectedRunoutPoint ? "selected" : ""}`} role="status">
+                    {selectedRunoutPoint ? <>
+                      <strong>{selectedRunoutPoint.age}y</strong>
+                      <span>Cash in hand: <b>{selectedRunoutPoint.corpus > 0 ? inr(selectedRunoutPoint.corpus) : "₹0"}</b></span>
+                      <span>Expenditure: <b>{inr(selectedRunoutPoint.requestedExpense)}</b></span>
+                    </> : "Tap a bar below to view finances at that age."}
+                  </div>
                   <ProjectionChart details={details} dependents={dependents} loan={loan} retirementAge={cannotRetire ? null : scenarioRetirementAge} selectedAge={selectedAge} onSelect={setSelectedAge}
                     showStatus={false} projectionData={browsedProjection} runoutLayout />
-                  <div className="runout-legend" aria-label="Chart legend">
-                    <span><i className="cash-key" />Cash in hand</span>
-                    <span><i className="expense-key" />Expenditure</span>
-                  </div>
                 </section>
-                <div className="runout-age-axis" aria-hidden="true"><span>30</span><span>45</span><span>60</span><span>75</span><span>90</span></div>
               </> : <>
                 <section className="retirement-result">
-                <h1>{showingCurrentRetirement ? "You are already retired" : "Retirement age"}</h1>
+                <h1>{showingCurrentRetirement ? "You are already retired" : "You can retire by"}</h1>
                 <strong>{scenarioRetirementAge ?? details.age}</strong>
                 <p>The {outlookLabel(outlook).toLowerCase()} scenario supports retirement at this age</p>
                   <button onClick={() => {
@@ -901,8 +938,8 @@ export default function Home() {
                 <h2 className="age-breakdown-title">Age wise breakdown of your finances</h2>
               </>}
             </section>
-            <nav className={`bottom-nav ${cannotRetire ? "runout-bottom-nav" : ""}`} aria-label="Plan actions">
-              <button className="share-main" aria-label="Edit details" onClick={() => { setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}>{cannotRetire ? <Image src={assetPath("/edit.svg")} width={24} height={24} alt="" /> : "Edit details"}</button>
+            <nav className="bottom-nav runout-bottom-nav" aria-label="Plan actions">
+              <button className="share-main" aria-label="Edit details" onClick={() => { setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}><Image src={assetPath("/edit.svg")} width={24} height={24} alt="" /></button>
               <button className="export-main primary-button" onClick={exportCsv}>Export</button>
             </nav>
           </>}
@@ -945,20 +982,19 @@ export default function Home() {
             <p>Your finance details are run through multiple historical and market scenarios to see how it survives till you turn 90</p>
             <p className="monte-carlo-copy">These scenarios are a simplified form of Monte Carlo simulations that uses a range of all rates year on year. These values are based on government data.</p>
             <div className="scenario-ranges-wrap">
+              <ScenarioRangeTabs value={outlook} onChange={setOutlook} />
               <table className="scenario-ranges" aria-label="Rate ranges by economy scenario">
                 <thead><tr>
                   <th scope="col">Rate</th>
-                  <th scope="col">Bad</th>
-                  <th scope="col">Average</th>
-                  <th scope="col">Good</th>
+                  <th scope="col">{outlookLabel(outlook).replace(" economy", "")}</th>
                 </tr></thead>
                 <tbody>
                   {(["inflation", "mutualFunds", "stocks", "fixedDeposits", "realEstate", "savings"] as RateKey[]).map((key) => <tr key={key}>
                     <th scope="row">{RESULT_RATE_LABELS[key]}</th>
-                    {OUTLOOKS.map((scenario) => {
-                      const summary = calculatedPlan?.rateSummaries[scenario][key];
-                      return <td key={scenario}>{summary ? compactPercentageRange(summary.min, summary.max) : percentage(BASE_RATES[key])}</td>;
-                    })}
+                    <td>{(() => {
+                      const summary = calculatedPlan?.rateSummaries[outlook][key];
+                      return summary ? compactPercentageRange(summary.min, summary.max) : percentage(BASE_RATES[key]);
+                    })()}</td>
                   </tr>)}
                 </tbody>
               </table>
