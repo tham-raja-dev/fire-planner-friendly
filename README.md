@@ -13,6 +13,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+To send local events to the production GA4 property, start the app with:
+
+```bash
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-KXLYTBYXZW npm run dev
+```
+
 ## Checks
 
 ```bash

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CirclePlus, Download, FileSpreadsheet, FileText, Landmark, Pencil, Share2, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { BASE_RATES, LIFE_EXPECTANCY, MODEL_VERSION, financesRunOutBy, projectScenario, simulationRateFrames } from "@/lib/fire-model";
+import { track } from "@/lib/analytics";
 import type { Outlook, RateKey, Recommendation, SimulationResult, YearPoint } from "@/lib/fire-model";
 import expenditureIcon from "@/public/details-expenditure.svg";
 import incomeIcon from "@/public/details-income.svg";
@@ -568,6 +569,34 @@ export default function Home() {
   const calculationFinishTimerRef = useRef<number | null>(null);
   const resultRevealTimerRef = useRef<number | null>(null);
   const wizardProgressRef = useRef<HTMLElement>(null);
+  const abandonmentTrackedRef = useRef(false);
+
+  useEffect(() => {
+    track("planner_screen_view", { screen, wizard_step: screen === "details" ? wizardStep : undefined });
+  }, [screen, wizardStep]);
+
+  useEffect(() => {
+    const captureButtonClick = (event: MouseEvent) => {
+      const button = (event.target as Element | null)?.closest("button");
+      if (!button) return;
+      const label = button.closest(".projection-chart")
+        ? "projection_chart_bar"
+        : button.getAttribute("aria-label") ?? button.textContent?.trim().replace(/\s+/g, " ").slice(0, 80) ?? "unlabelled";
+      track("button_click", { button_label: label, screen, wizard_step: screen === "details" ? wizardStep : undefined, sheet: sheet ?? "none" });
+    };
+    document.addEventListener("click", captureButtonClick, true);
+    return () => document.removeEventListener("click", captureButtonClick, true);
+  }, [screen, sheet, wizardStep]);
+
+  useEffect(() => {
+    const trackAbandonment = () => {
+      if (screen !== "details" || abandonmentTrackedRef.current) return;
+      abandonmentTrackedRef.current = true;
+      track("form_abandon", { wizard_step: wizardStep, wizard_step_name: ["age", "investments", "cash_flow", "dependants", "loans"][wizardStep - 1] });
+    };
+    window.addEventListener("pagehide", trackAbandonment);
+    return () => window.removeEventListener("pagehide", trackAbandonment);
+  }, [screen, wizardStep]);
 
   useEffect(() => {
     const activeStep = wizardProgressRef.current?.querySelector<HTMLButtonElement>("button.active");
@@ -655,6 +684,8 @@ export default function Home() {
     setSelectedAge(null);
   };
   const calculateRetirementAge = () => {
+    abandonmentTrackedRef.current = true;
+    track("form_submit", { wizard_step: wizardStep, has_dependants: dependents.count > 0, has_loan: loan.balance > 0 || loan.emi > 0 });
     calculationStartedAtRef.current = performance.now();
     setLoadingExiting(false);
     setCalculatedPlan(null);
@@ -663,6 +694,7 @@ export default function Home() {
   };
   const goToWizardStep = (step: number) => {
     const nextStep = Math.max(1, Math.min(5, step));
+    track(nextStep > wizardStep ? "form_step_complete" : "form_step_navigate", { from_step: wizardStep, to_step: nextStep, direction: nextStep > wizardStep ? "forward" : nextStep < wizardStep ? "back" : "same" });
     setWizardDirection(nextStep >= wizardStep ? "forward" : "back");
     setWizardStep(nextStep);
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -697,6 +729,7 @@ export default function Home() {
     sectionNavigationTimerRef.current = window.setTimeout(() => { sectionNavigationRef.current = false; }, 120);
   };
   const exportCsv = () => {
+    track("primary_cta_click", { cta: targetAge === null ? "export_plan" : "download_adjusted_plan", screen, scenario: outlook });
     const hypotheticalDetails = details;
     const projection = targetAge === null
       ? calculatedPlan
@@ -736,8 +769,10 @@ export default function Home() {
     URL.revokeObjectURL(link.href);
   };
   const nativeShare = async () => {
+    const canNativeShare = typeof (navigator as unknown as { share?: (data: ShareData) => Promise<void> }).share === "function";
+    track("share_plan", { method: canNativeShare ? "native_share" : "copy_link" });
     const shareData = { title: "My FIRE plan", text: `My target retirement age is ${activeRetirementAge}.`, url: window.location.href };
-    if (navigator.share) await navigator.share(shareData);
+    if (canNativeShare) await navigator.share(shareData);
     else await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
   };
 
@@ -752,7 +787,7 @@ export default function Home() {
             <section className="start-copy">
               <h1>How long can your finances last?</h1>
               <p>See your finances run across multiple scenarios to determine how long does it last or by when can you retire</p>
-              <button className="primary-button" onClick={() => { setWizardStep(1); setScreen("details"); }}>See my financial outlook</button>
+              <button className="primary-button" onClick={() => { track("planner_start", { entry_point: "hero_cta" }); abandonmentTrackedRef.current = false; setWizardStep(1); setScreen("details"); }}>See my financial outlook</button>
             </section>
           </div>
         )}
@@ -896,12 +931,12 @@ export default function Home() {
 
         {(screen === "loading" || screen === "result") && <LoadingScreen
           details={details} dependents={dependents} loan={loan} projection={previewPlan} finalPlan={calculatedPlan} exiting={loadingExiting} phase={screen}
-          retirementAge={sheet === "retirement" && targetAge !== null ? targetAge : scenarioRetirementAge} compactResultLayout={compactResultLayout} selectedAge={selectedAge} onSelect={setSelectedAge}
+          retirementAge={sheet === "retirement" && targetAge !== null ? targetAge : scenarioRetirementAge} compactResultLayout={compactResultLayout} selectedAge={selectedAge} onSelect={(age) => { track("result_chart_age_select", { age, action: age === null ? "clear" : "select", scenario: outlook }); setSelectedAge(age); }}
           resultProjection={sheet === "retirement" && targetAge !== null ? targetProjection?.paths[outlook] ?? browsedProjection : browsedProjection}
         >
           {screen === "result" && <>
             <section className={`result-content ${compactResultLayout ? "runout-result-content" : ""}`}>
-              <EconomyTabs value={outlook} onChange={setOutlook} onHelp={() => setSheet("scenarios")} />
+              <EconomyTabs value={outlook} onChange={(value) => { if (value !== outlook) track("result_scenario_change", { from_scenario: outlook, to_scenario: value }); setOutlook(value); }} onHelp={() => { track("scenario_details_open", { scenario: outlook }); setSheet("scenarios"); }} />
               {compactResultLayout ? <>
                 <section className="runout-summary">
                   <h1>{cannotRetire ? runout.depleted ? "Your finances will run out by" : "Your finances last beyond" : "You can retire by"}</h1>
@@ -909,6 +944,7 @@ export default function Home() {
                     <strong>{cannotRetire ? runout.age : scenarioRetirementAge}</strong>
                   </div>
                   <button onClick={() => {
+                    track("change_age_open", { scenario: outlook, retirement_status: cannotRetire ? "not_possible" : "possible" });
                     const age = scenarioRetirementAge ?? Math.min(Math.max(details.age, 35), 70);
                     setRecommendationsLoading(true); setTargetProjection(null); setTargetAge(age); setSelectedAge(age);
                     setSheet("retirement");
@@ -932,6 +968,7 @@ export default function Home() {
                 <strong>{scenarioRetirementAge ?? details.age}</strong>
                 <p>The {outlookLabel(outlook).toLowerCase()} scenario supports retirement at this age</p>
                   <button onClick={() => {
+                  track("change_age_open", { scenario: outlook, retirement_status: "possible" });
                   setRecommendationsLoading(true); setTargetProjection(null); setTargetAge(scenarioRetirementAge ?? details.age); setSelectedAge(scenarioRetirementAge ?? details.age);
                   setSheet("retirement");
                 }}><SlidersHorizontal size={20} />Change age</button>
@@ -940,7 +977,7 @@ export default function Home() {
               </>}
             </section>
             <nav className="bottom-nav runout-bottom-nav" aria-label="Plan actions">
-              <button className="share-main" aria-label="Edit details" onClick={() => { setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}><Image src={assetPath("/edit.svg")} width={24} height={24} alt="" /></button>
+              <button className="share-main" aria-label="Edit details" onClick={() => { track("primary_cta_click", { cta: "edit_details", screen: "result", scenario: outlook }); abandonmentTrackedRef.current = false; setEditingDetails(true); setChartExpanded(false); setScreen("details"); }}><Image src={assetPath("/edit.svg")} width={24} height={24} alt="" /></button>
               <button className="export-main primary-button" onClick={exportCsv}>Export</button>
             </nav>
           </>}
@@ -949,6 +986,7 @@ export default function Home() {
         {sheet === "retirement" && targetAge !== null && <BottomSheet title={scenarioRetirementAge === null ? "Set retirement age" : "Change retirement age"} onClose={() => { setSheet(null); setTargetAge(null); setTargetProjection(null); setSelectedAge(scenarioRetirementAge ?? details.age); }}>
           <p className="calculated-age-copy">{outlookLabel(outlook).toLowerCase()} scenario</p>
           <RangeField label="I want to retire by…" value={targetAge} min={details.age} max={LIFE_EXPECTANCY - 1} step={1} prefix="" onChange={(age) => {
+            track("retirement_target_age_change", { age, scenario: outlook });
             setRecommendationsLoading(true); setTargetProjection(null); setTargetAge(age); setSelectedAge(age);
           }} />
           <h3 className="changes-heading">You need to bring in these changes</h3>
@@ -983,7 +1021,7 @@ export default function Home() {
             <p>Your finances are simulated across 1,000 randomized market futures to test whether your savings survive through age 90.</p>
             <p className="monte-carlo-copy">Each future is a Monte Carlo simulation where returns and inflation fluctuate year-on-year across realistic ranges based on government and market data.</p>
             <div className="scenario-ranges-wrap">
-              <ScenarioRangeTabs value={outlook} onChange={setOutlook} />
+              <ScenarioRangeTabs value={outlook} onChange={(value) => { if (value !== outlook) track("scenario_sheet_tab_change", { from_scenario: outlook, to_scenario: value }); setOutlook(value); }} />
               <table className="scenario-ranges" aria-label="Rate ranges by economy scenario">
                 <thead><tr>
                   <th scope="col">Rate</th>
