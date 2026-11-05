@@ -77,7 +77,7 @@ const chartMetric = (value: number) => {
   return Math.round(value).toLocaleString("en-IN");
 };
 const dependentMonthlyCost = (dependents: Dependents) => dependents.count * dependents.annualCostPerDependent / 12;
-const investedTotal = (details: Details) => details.mutualFunds + details.fixedDeposits + details.realEstate + details.bankSavings;
+const investedTotal = (details: Details) => details.mutualFunds + (details.stocks ?? 0) + details.fixedDeposits + details.realEstate + details.bankSavings;
 const baselineInvestment = (details: Details, dependents: Dependents, loan: Loan) =>
   Math.max(0, details.monthlyIncome - details.monthlyExpense - dependentMonthlyCost(dependents) - loan.emi);
 
@@ -96,17 +96,19 @@ function annualRetirementCost(details: Details, dependents: Dependents, loan: Lo
 
 export function corpusAtRetirement(details: Details, dependents: Dependents, loan: Loan, retirementAge: number, monthlyInvestment: number) {
   let mutualFunds = details.mutualFunds;
+  let stocks = details.stocks ?? 0;
   let fixedDeposits = details.fixedDeposits;
   let realEstate = details.realEstate;
   let newSavings = details.bankSavings;
   for (let age = details.age; age < retirementAge; age += 1) {
     const elapsed = age - details.age;
     mutualFunds *= 1 + MUTUAL_FUND_RETURN;
+    stocks *= 1 + MUTUAL_FUND_RETURN;
     fixedDeposits *= 1 + FIXED_DEPOSIT_RETURN;
     realEstate *= 1 + REAL_ESTATE_RETURN;
     newSavings = newSavings * (1 + NEW_SAVINGS_RETURN) + monthlyInvestmentAt(details, dependents, loan, monthlyInvestment, elapsed) * 12;
   }
-  return mutualFunds + fixedDeposits + realEstate + newSavings;
+  return mutualFunds + stocks + fixedDeposits + realEstate + newSavings;
 }
 
 export function corpusLastsToLifeExpectancy(details: Details, dependents: Dependents, loan: Loan, retirementAge: number, monthlyInvestment: number, monthlyExpense: number) {
@@ -190,7 +192,7 @@ function AgeWheel({ age, onChange }: { age: number; onChange: (age: number) => v
   const initialAge = useRef(age);
   const scrollTargetAge = useRef<number | null>(null);
   const minimumAge = 18;
-  const maximumAge = 70;
+  const maximumAge = 80;
   const rowHeight = 88;
   useLayoutEffect(() => {
     if (wheelRef.current) wheelRef.current.scrollTop = (initialAge.current - minimumAge) * rowHeight;
@@ -306,6 +308,7 @@ function ProjectionChart({ details, dependents, loan, retirementAge, scenario, s
       : baselineInvestment(details, dependents, loan);
     const monthlyExpense = scenario?.monthlyExpense ?? details.monthlyExpense;
     let mutualFunds = details.mutualFunds;
+    let stocks = details.stocks ?? 0;
     let fixedDeposits = details.fixedDeposits;
     let realEstate = details.realEstate;
     let newSavings = details.bankSavings;
@@ -317,10 +320,11 @@ function ProjectionChart({ details, dependents, loan, retirementAge, scenario, s
       const displayedCorpus = corpus;
       if (age < withdrawalAge) {
         mutualFunds *= 1 + MUTUAL_FUND_RETURN;
+        stocks *= 1 + MUTUAL_FUND_RETURN;
         fixedDeposits *= 1 + FIXED_DEPOSIT_RETURN;
         realEstate *= 1 + REAL_ESTATE_RETURN;
         newSavings = newSavings * (1 + NEW_SAVINGS_RETURN) + monthlyInvestmentAt(details, dependents, loan, contribution, elapsed) * 12;
-        corpus = mutualFunds + fixedDeposits + realEstate + newSavings;
+        corpus = mutualFunds + stocks + fixedDeposits + realEstate + newSavings;
         return { age, corpus: displayedCorpus, expense: requestedExpense, requestedExpense };
       } else {
         const availableCash = corpus * (1 + POST_RETIREMENT_RETURN);
@@ -633,6 +637,7 @@ export default function Home() {
   const compactResultLayout = calculatedPlan !== null && (
     estimatedAge === null || Object.values(calculatedPlan.scenarioRetirementAges).some((age) => age === null)
   );
+  const recoveryMode = calculatedPlan !== null && estimatedAge === null;
   const activeRetirementAge = targetAge ?? scenarioRetirementAge ?? details.age;
   const cannotRetire = calculatedPlan !== null && scenarioRetirementAge === null;
   const alreadyRetired = details.monthlyIncome === 0;
@@ -753,7 +758,7 @@ export default function Home() {
         )}
 
         {screen === "details" && (
-          <div className="wizard-screen" ref={scrollRef}>
+          <div className={`wizard-screen ${wizardStep === 1 ? "age-screen" : ""}`} ref={scrollRef}>
             <nav ref={wizardProgressRef} className="wizard-progress" aria-label="Your progress">
               <div className="wizard-progress-track">
               {["Age", "Investments", "Monthly cash flow", "Dependants", "Loans"].map((label, index, steps) => {
@@ -772,43 +777,39 @@ export default function Home() {
                 <AgeWheel age={details.age} onChange={(age) => setDetails((current) => ({ ...current, age }))} />
               </>}
               {wizardStep === 2 && <>
-                <Image className="wizard-image" src={investmentsIcon} alt="" />
                 <h1>Tell us about your investments</h1>
-                <RangeField label="Mutual Funds" value={details.mutualFunds} min={0} max={20_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, mutualFunds: value })} />
-                <RangeField label="Monthly SIPs in Mutual Funds" value={details.monthlySip} min={0} max={500_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlySip: value })} />
-                <RangeField label="Stocks" value={details.stocks} min={0} max={20_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, stocks: value })} />
-                <RangeField label="FD" value={details.fixedDeposits} min={0} max={10_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, fixedDeposits: value })} />
-                <RangeField label="Real Estate" value={details.realEstate} min={0} max={50_000_000} step={100_000} prefix="" onChange={(value) => setDetails({ ...details, realEstate: value })} />
-                <RangeField label="Bank savings" value={details.bankSavings} min={0} max={10_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, bankSavings: value })} />
+                <RangeField label="Mutual Funds" value={details.mutualFunds} min={0} max={100_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, mutualFunds: value })} />
+                <RangeField label="Monthly SIPs in Mutual Funds" value={details.monthlySip} min={0} max={1_000_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlySip: value })} />
+                <RangeField label="Stocks" value={details.stocks} min={0} max={100_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, stocks: value })} />
+                <RangeField label="FD" value={details.fixedDeposits} min={0} max={50_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, fixedDeposits: value })} />
+                <RangeField label="Real Estate" value={details.realEstate} min={0} max={200_000_000} step={100_000} prefix="" onChange={(value) => setDetails({ ...details, realEstate: value })} />
+                <RangeField label="Bank savings" value={details.bankSavings} min={0} max={50_000_000} step={50_000} prefix="" onChange={(value) => setDetails({ ...details, bankSavings: value })} />
               </>}
               {wizardStep === 3 && <>
-                <Image className="wizard-image" src={incomeIcon} alt="" />
                 <h1>Your monthly income &amp; expenditure</h1>
-                <RangeField label="Income" value={details.monthlyIncome} min={0} max={500_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyIncome: value })} />
-                <RangeField label="Expenditure" value={details.monthlyExpense} min={0} max={300_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyExpense: value })} />
+                <RangeField label="Income" value={details.monthlyIncome} min={0} max={2_000_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyIncome: value })} />
+                <RangeField label="Expenditure" value={details.monthlyExpense} min={0} max={1_000_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyExpense: value })} />
                 <button className="wizard-link" onClick={() => setSheet("help")}>Help figure out my expenses</button>
               </>}
               {wizardStep === 4 && <>
-                <Image className="wizard-image" src={incomeIcon} alt="" />
                 <h1>Add details about your dependants</h1>
                 {dependantEntries.length === 0 ? <button className="dependant-empty" onClick={() => updateDependantEntries([{ id: Date.now(), annualCost: 120_000, supportYears: 10 }])}>Add dependant</button> : <>
                   {dependantEntries.map((entry, index) => <div className="dependant-card" key={entry.id}>
                     <div className="dependant-title"><b>Dependant #{index + 1}</b><button aria-label={`Remove dependant ${index + 1}`} onClick={() => updateDependantEntries(dependantEntries.filter((item) => item.id !== entry.id))}><Trash2 size={20} /></button></div>
-                    <RangeField label="Annual expenditure" value={entry.annualCost} min={0} max={2_400_000} step={25_000} prefix="" onChange={(value) => updateDependantEntries(dependantEntries.map((item) => item.id === entry.id ? { ...item, annualCost: value } : item))} />
-                    <RangeField className="support-years-field" label="Support needed in years" value={entry.supportYears} min={1} max={30} step={1} prefix="" onChange={(value) => updateDependantEntries(dependantEntries.map((item) => item.id === entry.id ? { ...item, supportYears: value } : item))} />
+                    <RangeField label="Annual expenditure" value={entry.annualCost} min={0} max={5_000_000} step={25_000} prefix="" onChange={(value) => updateDependantEntries(dependantEntries.map((item) => item.id === entry.id ? { ...item, annualCost: value } : item))} />
+                    <RangeField className="support-years-field" label="Support needed in years" value={entry.supportYears} min={1} max={35} step={1} prefix="" onChange={(value) => updateDependantEntries(dependantEntries.map((item) => item.id === entry.id ? { ...item, supportYears: value } : item))} />
                   </div>)}
                   <button className="wizard-link" onClick={() => updateDependantEntries([...dependantEntries, { id: Date.now(), annualCost: 120_000, supportYears: 10 }])}>Add dependant</button>
                 </>}
               </>}
               {wizardStep === 5 && <>
-                <Landmark className="wizard-icon" size={40} />
                 <h1>Add details about your loans</h1>
                 {loan.balance === 0 && loan.emi === 0 ? <button className="dependant-empty" onClick={() => setLoan({ balance: 1_200_000, emi: 25_000, remainingYears: 5 })}><CirclePlus size={20} />Add loan</button> : <>
                   <div className="dependant-card">
                     <div className="dependant-title"><b>Loan #1</b><button aria-label="Remove loan" onClick={() => setLoan(DEFAULT_LOAN)}><Trash2 size={20} /></button></div>
-                    <RangeField label="Outstanding balance" value={loan.balance} min={0} max={20_000_000} step={50_000} prefix="" onChange={(value) => setLoan({ ...loan, balance: value })} />
-                    <RangeField label="Monthly EMI" value={loan.emi} min={0} max={300_000} step={2_500} prefix="" onChange={(value) => setLoan({ ...loan, emi: value })} />
-                    <RangeField label="Years remaining" value={loan.remainingYears} min={1} max={30} step={1} prefix="" onChange={(value) => setLoan({ ...loan, remainingYears: value })} />
+                    <RangeField label="Outstanding balance" value={loan.balance} min={0} max={100_000_000} step={50_000} prefix="" onChange={(value) => setLoan({ ...loan, balance: value })} />
+                    <RangeField label="Monthly EMI" value={loan.emi} min={0} max={1_000_000} step={5_000} prefix="" onChange={(value) => setLoan({ ...loan, emi: value })} />
+                    <RangeField label="Years remaining" value={loan.remainingYears} min={1} max={35} step={1} prefix="" onChange={(value) => setLoan({ ...loan, remainingYears: value })} />
                   </div>
                   <button className="wizard-link" type="button">Add loan</button>
                 </>}
@@ -979,8 +980,8 @@ export default function Home() {
                 projectionData={calculatedPlan?.paths.typical} possiblePaths={calculatedPlan?.samples}
                 possibleExpensePaths={calculatedPlan?.expenseSamples} showOutcomes showStatus={false} />
             </div>
-            <p>Your finance details are run through multiple historical and market scenarios to see how it survives till you turn 90</p>
-            <p className="monte-carlo-copy">These scenarios are a simplified form of Monte Carlo simulations that uses a range of all rates year on year. These values are based on government data.</p>
+            <p>Your finances are simulated across 1,000 randomized market futures to test whether your savings survive through age 90.</p>
+            <p className="monte-carlo-copy">Each future is a Monte Carlo simulation where returns and inflation fluctuate year-on-year across realistic ranges based on government and market data.</p>
             <div className="scenario-ranges-wrap">
               <ScenarioRangeTabs value={outlook} onChange={setOutlook} />
               <table className="scenario-ranges" aria-label="Rate ranges by economy scenario">
@@ -1006,15 +1007,15 @@ export default function Home() {
 
         {sheet === "dependents" && <BottomSheet title="Add dependents" onClose={() => setSheet(null)}>
           <RangeField label="Number of dependents" value={dependents.count} min={0} max={8} step={1} prefix="" onChange={(value) => setDependents({ ...dependents, count: value })} />
-          <RangeField label="Annual cost per dependent" value={dependents.annualCostPerDependent} min={0} max={2_400_000} step={25_000} onChange={(value) => setDependents({ ...dependents, annualCostPerDependent: value })} />
-          <RangeField label="Support for years" value={dependents.supportYears} min={1} max={30} step={1} prefix="" onChange={(value) => setDependents({ ...dependents, supportYears: value })} />
+          <RangeField label="Annual cost per dependent" value={dependents.annualCostPerDependent} min={0} max={5_000_000} step={25_000} onChange={(value) => setDependents({ ...dependents, annualCostPerDependent: value })} />
+          <RangeField label="Support for years" value={dependents.supportYears} min={1} max={35} step={1} prefix="" onChange={(value) => setDependents({ ...dependents, supportYears: value })} />
           <button className="primary-button sheet-action" onClick={() => setSheet(null)}>Save dependents</button>
         </BottomSheet>}
 
         {sheet === "loan" && <BottomSheet title="Add a loan" onClose={() => setSheet(null)}>
-          <RangeField label="Outstanding balance" value={loan.balance} min={0} max={20_000_000} step={50_000} onChange={(value) => setLoan({ ...loan, balance: value })} />
-          <RangeField label="Monthly EMI" value={loan.emi} min={0} max={300_000} step={2_500} onChange={(value) => setLoan({ ...loan, emi: value })} />
-          <RangeField label="Years remaining" value={loan.remainingYears} min={1} max={30} step={1} prefix="" onChange={(value) => setLoan({ ...loan, remainingYears: value })} />
+          <RangeField label="Outstanding balance" value={loan.balance} min={0} max={100_000_000} step={50_000} onChange={(value) => setLoan({ ...loan, balance: value })} />
+          <RangeField label="Monthly EMI" value={loan.emi} min={0} max={1_000_000} step={5_000} onChange={(value) => setLoan({ ...loan, emi: value })} />
+          <RangeField label="Years remaining" value={loan.remainingYears} min={1} max={35} step={1} prefix="" onChange={(value) => setLoan({ ...loan, remainingYears: value })} />
           <button className="primary-button sheet-action" onClick={() => setSheet(null)}>Save loan</button>
         </BottomSheet>}
 

@@ -77,8 +77,8 @@ test("scenario sheet renders all 100 sampled futures and its complete explanatio
   assert.match(page, /possiblePaths\.slice\(0, 100\)/);
   assert.match(page, /possibleExpensePaths\.slice\(0, 100\)/);
   assert.match(page, /Scenario simulations/);
-  assert.match(page, /multiple historical and market scenarios/);
-  assert.match(page, /simplified form of Monte Carlo simulations/);
+  assert.match(page, /simulated across 1,000 randomized market futures/);
+  assert.match(page, /Monte Carlo simulations/);
   assert.match(page, />Know more</);
   assert.match(page, />Got it</);
   assert.doesNotMatch(css, /\.scenario-chart \.bar\.expense\s*\{[^}]*display:\s*none/);
@@ -119,8 +119,8 @@ test("age selector centers clicked ages and exposes Figma arrow controls", () =>
   assert.match(page, /aria-label="Select previous age"/);
   assert.match(page, /aria-label="Select next age"/);
   assert.doesNotMatch(page, /className="age-chart-glyph"/);
-  assert.match(css, /\.age-wheel-shell\s*\{[^}]*height:\s*587px/);
-  assert.match(css, /\.age-wheel-values\s*\{[^}]*padding:\s*249px 0/);
+  assert.match(css, /\.age-wheel-shell\s*\{[^}]*flex:\s*1 1 0/);
+  assert.match(css, /\.age-wheel-values\s*\{[^}]*padding:\s*calc\(50% - 44px\) 0/);
   assert.match(css, /\.age-wheel-fade\s*\{[^}]*right:\s*16px[^}]*left:\s*16px/);
   assert.match(css, /\.age-wheel-fade-top\s*\{[^}]*height:\s*139px/);
   assert.match(css, /\.age-wheel-fade-bottom\s*\{[^}]*height:\s*192px/);

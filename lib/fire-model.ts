@@ -74,36 +74,78 @@ export function simulationRateFrames(seed = 731942, count = 12): Record<RateKey,
   return scenarioMatrix(seed, 1)[0].slice(0, count);
 }
 
+export function realReturnFisher(nominal: number, inflation: number): number {
+  return (1 + nominal) / (1 + inflation) - 1;
+}
+
+export function realReturnSimple(nominal: number, inflation: number): number {
+  return nominal - inflation;
+}
+
+export function monthlyCompoundedAnnualRate(monthlyRate: number): number {
+  return Math.pow(1 + monthlyRate, 12) - 1;
+}
+
+export function annualToMonthlyCompoundedRate(annualRate: number): number {
+  return Math.pow(1 + annualRate, 1 / 12) - 1;
+}
+
+export function futureValueOrdinaryAnnuity(payment: number, annualRate: number, years: number): number {
+  if (annualRate === 0) return payment * years;
+  return payment * (Math.pow(1 + annualRate, years) - 1) / annualRate;
+}
+
+export function futureValueAnnuityDue(payment: number, annualRate: number, years: number): number {
+  if (annualRate === 0) return payment * years;
+  return futureValueOrdinaryAnnuity(payment, annualRate, years) * (1 + annualRate);
+}
+
+export function presentValueOrdinaryAnnuity(payment: number, annualRate: number, years: number): number {
+  if (annualRate === 0) return payment * years;
+  return payment * (1 - Math.pow(1 + annualRate, -years)) / annualRate;
+}
+
+export function presentValueAnnuityDue(payment: number, annualRate: number, years: number): number {
+  if (annualRate === 0) return payment * years;
+  return presentValueOrdinaryAnnuity(payment, annualRate, years) * (1 + annualRate);
+}
+
 const dependentMonthlyCost = (dependents: Dependents) => dependents.count * dependents.annualCostPerDependent / 12;
 const total = (b: Buckets) => b.savings + b.fixedDeposits + b.mutualFunds + b.stocks + b.realEstate;
 function grow(b: Buckets, rates: Shocks) {
-  b.savings *= 1 + rates.savings;
-  b.fixedDeposits *= 1 + rates.fixedDeposits;
-  b.mutualFunds *= 1 + rates.mutualFunds;
-  b.stocks *= 1 + rates.stocks;
-  b.realEstate *= 1 + rates.realEstate;
+  b.savings = Math.max(0, b.savings * (1 + rates.savings));
+  b.fixedDeposits = Math.max(0, b.fixedDeposits * (1 + rates.fixedDeposits));
+  b.mutualFunds = Math.max(0, b.mutualFunds * (1 + rates.mutualFunds));
+  b.stocks = Math.max(0, b.stocks * (1 + rates.stocks));
+  b.realEstate = Math.max(0, b.realEstate * (1 + rates.realEstate));
 }
 export function withdrawFromBuckets(b: Buckets, amount: number) {
-  let remaining = amount;
+  let remaining = Math.max(0, amount);
   for (const key of ["savings", "fixedDeposits", "mutualFunds", "stocks", "realEstate"] as const) {
+    if (b[key] <= 0) continue;
     const used = Math.min(b[key], remaining);
     b[key] -= used;
     remaining -= used;
   }
-  return amount - remaining;
+  return Math.max(0, amount - remaining);
 }
 
 function runPath(details: Details, dependents: Dependents, loan: Loan, retirementAge: number, shocks: Shocks[]): { points: YearPoint[]; success: boolean } {
   const buckets: Buckets = {
-    savings: details.bankSavings, fixedDeposits: details.fixedDeposits,
-    mutualFunds: details.mutualFunds, stocks: details.stocks, realEstate: details.realEstate,
+    savings: Math.max(0, details.bankSavings),
+    fixedDeposits: Math.max(0, details.fixedDeposits),
+    mutualFunds: Math.max(0, details.mutualFunds),
+    stocks: Math.max(0, details.stocks),
+    realEstate: Math.max(0, details.realEstate),
   };
   let expenseMultiplier = 1;
   const points: YearPoint[] = [];
   let success = true;
-  for (let age = details.age; age <= LIFE_EXPECTANCY; age += 1) {
+  const targetEndAge = Math.max(details.age, LIFE_EXPECTANCY);
+  for (let age = details.age; age <= targetEndAge; age += 1) {
     const elapsed = age - details.age;
-    const rates = shocks[age - 20];
+    const shockIndex = Math.max(0, Math.min(shocks.length - 1, age - 20));
+    const rates = shocks[shockIndex] ?? BASE_RATES;
     const dependentCost = elapsed < dependents.supportYears ? dependentMonthlyCost(dependents) * expenseMultiplier : 0;
     const loanCost = elapsed < loan.remainingYears ? loan.emi : 0;
     const requestedExpense = (details.monthlyExpense * expenseMultiplier + dependentCost + loanCost) * 12;
@@ -113,7 +155,14 @@ function runPath(details: Details, dependents: Dependents, loan: Loan, retiremen
       grow(buckets, rates);
       const income = details.monthlyIncome * expenseMultiplier;
       const availableAfterCosts = income - details.monthlyExpense * expenseMultiplier - dependentCost - loanCost;
-      if (availableAfterCosts < 0) withdrawFromBuckets(buckets, Math.abs(availableAfterCosts) * 12);
+      if (availableAfterCosts < 0) {
+        const deficit = Math.abs(availableAfterCosts) * 12;
+        const withdrawn = withdrawFromBuckets(buckets, deficit);
+        if (withdrawn + 0.01 < deficit) {
+          success = false;
+          paidExpense = Math.max(0, income * 12 + withdrawn);
+        }
+      }
       const affordableSip = Math.min(details.monthlySip * expenseMultiplier, Math.max(0, availableAfterCosts));
       buckets.mutualFunds += affordableSip * 12;
       buckets.savings += Math.max(0, availableAfterCosts - affordableSip) * 12;
@@ -135,7 +184,8 @@ function successAt(details: Details, dependents: Dependents, loan: Loan, retirem
 }
 
 function earliestSustainableAge(details: Details, dependents: Dependents, loan: Loan, shocks: Shocks[]): number | null {
-  const candidates = details.monthlyIncome === 0 ? [details.age] : Array.from({ length: LIFE_EXPECTANCY - details.age }, (_, index) => details.age + index);
+  const maxSearchAge = Math.max(details.age, LIFE_EXPECTANCY);
+  const candidates = details.monthlyIncome === 0 ? [details.age] : Array.from({ length: maxSearchAge - details.age + 1 }, (_, index) => details.age + index);
   return candidates.find((age) => runPath(details, dependents, loan, age, shocks).success) ?? null;
 }
 
@@ -177,7 +227,11 @@ function representativeRateSummaries(runs: ReturnType<typeof runPath>[], matrix:
   const indices = representativeRunIndices(runs);
   const summarize = (outlook: Outlook) => {
     const runIndex = indices[outlook];
-    const yearlyRates = runs[runIndex].points.map((point) => matrix[runIndex][point.age - 20]);
+    const shocks = matrix[runIndex];
+    const yearlyRates = runs[runIndex].points.map((point) => {
+      const idx = Math.max(0, Math.min(shocks.length - 1, point.age - 20));
+      return shocks[idx] ?? BASE_RATES;
+    });
     return Object.fromEntries((Object.keys(BASE_RATES) as RateKey[]).map((key) => {
       const values = yearlyRates.map((rates) => rates[key]);
       return [key, { average: values.reduce((sum, value) => sum + value, 0) / values.length, min: Math.min(...values), max: Math.max(...values) }];
@@ -187,7 +241,10 @@ function representativeRateSummaries(runs: ReturnType<typeof runPath>[], matrix:
 }
 
 function rateSummaryForRun(run: ReturnType<typeof runPath>, shocks: Shocks[]): RateSummary {
-  const yearlyRates = run.points.map((point) => shocks[point.age - 20]);
+  const yearlyRates = run.points.map((point) => {
+    const idx = Math.max(0, Math.min(shocks.length - 1, point.age - 20));
+    return shocks[idx] ?? BASE_RATES;
+  });
   return Object.fromEntries((Object.keys(BASE_RATES) as RateKey[]).map((key) => {
     const values = yearlyRates.map((rates) => rates[key]);
     return [key, { average: values.reduce((sum, value) => sum + value, 0) / values.length, min: Math.min(...values), max: Math.max(...values) }];
@@ -198,7 +255,8 @@ export function calculatePlan(details: Details, dependents: Dependents, loan: Lo
   const matrix = scenarioMatrix(seed);
   let retirementAge: number | null = null;
   let successRate = 0;
-  const candidates = details.monthlyIncome === 0 ? [details.age] : Array.from({ length: LIFE_EXPECTANCY - details.age }, (_, i) => details.age + i);
+  const maxSearchAge = Math.max(details.age, LIFE_EXPECTANCY);
+  const candidates = details.monthlyIncome === 0 ? [details.age] : Array.from({ length: maxSearchAge - details.age + 1 }, (_, i) => details.age + i);
   for (const age of candidates) {
     const rate = successAt(details, dependents, loan, age, matrix);
     if (rate >= SUCCESS_THRESHOLD) { retirementAge = age; successRate = rate; break; }
