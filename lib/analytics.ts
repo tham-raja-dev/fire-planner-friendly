@@ -2,7 +2,8 @@ export type AnalyticsProperties = Record<string, string | number | boolean | nul
 
 declare global {
   interface Window {
-    dataLayer?: Array<Record<string, unknown>>;
+    dataLayer?: unknown[];
+    gtag?: (command: "event", eventName: string, properties?: AnalyticsProperties) => void;
   }
 }
 
@@ -10,6 +11,7 @@ export function track(event: string, properties: AnalyticsProperties = {}) {
   if (typeof window === "undefined") return;
   const payload = Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
   window.dataLayer = window.dataLayer ?? [];
-  window.dataLayer.push({ event, ...payload });
+  window.gtag = window.gtag ?? function gtag() { window.dataLayer?.push(arguments); };
+  window.gtag("event", event, payload);
   window.dispatchEvent(new CustomEvent("fire-planner:analytics", { detail: { event, properties: payload } }));
 }
