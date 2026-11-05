@@ -26,6 +26,20 @@ test("details popover includes the complete navigation and supplied section artw
   for (const asset of ["details-investments.svg", "details-income.svg", "details-expenditure.svg"]) assert.match(page, new RegExp(asset.replace(".", "\\.")));
 });
 
+test("expense helper saves a persistent category breakdown into monthly expenditure", () => {
+  for (const label of ["Rent", "Food and groceries", "Shopping", "Gym and fitness", "Dining out", "Medicines", "Water bill", "House maintenance", "Phone bill", "Electricity bill", "Internet bill", "Daily commute (fuel or cab)", "Subscriptions (OTT, magazines, etc.)", "Cook, maid, driver, etc."]) {
+    assert.match(page, new RegExp(label.replace(/[().]/g, "\\$&")));
+  }
+  assert.match(page, /function ExpenseBuilder/);
+  assert.match(page, /Total monthly expenses/);
+  assert.match(page, /setExpenseBreakdown\(breakdown\)/);
+  assert.match(page, /monthlyExpense: total/);
+  assert.match(page, />Save expenses</);
+  assert.match(page, /track\("expense_drawer_open"/);
+  assert.match(page, /track\("expense_field_interact", \{ expense_category: category\.key \}\)/);
+  assert.match(css, /\.expense-builder-total\s*\{[^}]*position:\s*sticky/);
+});
+
 test("details scroller does not establish a fixed-position containing block", () => {
   const rule = css.match(/\.details-screen\s*\{([^}]*)\}/)?.[1] ?? "";
   assert.doesNotMatch(rule, /\bcontain\s*:\s*(?:paint|layout|content|strict)/);

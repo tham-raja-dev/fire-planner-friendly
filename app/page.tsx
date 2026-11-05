@@ -18,6 +18,8 @@ type Dependents = { count: number; annualCostPerDependent: number; supportYears:
 type DependantEntry = { id: number; annualCost: number; supportYears: number };
 type Loan = { balance: number; emi: number; remainingYears: number };
 type Scenario = { monthlyInvestment: number; monthlyIncome: number; monthlyExpense: number; incomeAnchor: number };
+type ExpenseKey = "rent" | "food" | "shopping" | "fitness" | "diningOut" | "medicines" | "water" | "houseMaintenance" | "phone" | "electricity" | "internet" | "commute" | "subscriptions" | "householdStaff";
+type ExpenseBreakdown = Record<ExpenseKey, number>;
 
 const DEFAULTS: Details = {
   age: 34, mutualFunds: 4_000_000, monthlySip: 120_000, stocks: 120_000, fixedDeposits: 120_000, realEstate: 0,
@@ -26,6 +28,27 @@ const DEFAULTS: Details = {
 };
 const DEFAULT_DEPENDENTS: Dependents = { count: 0, annualCostPerDependent: 0, supportYears: 10 };
 const DEFAULT_LOAN: Loan = { balance: 0, emi: 0, remainingYears: 5 };
+const DEFAULT_EXPENSE_BREAKDOWN: ExpenseBreakdown = {
+  rent: 0, food: 0, shopping: 0, fitness: 0, diningOut: 0, medicines: 0, water: 0,
+  houseMaintenance: 0, phone: 0, electricity: 0, internet: 0, commute: 0, subscriptions: 0, householdStaff: 0,
+};
+const EXPENSE_CATEGORIES: { key: ExpenseKey; label: string; max: number; step: number }[] = [
+  { key: "rent", label: "Rent", max: 300_000, step: 1_000 },
+  { key: "food", label: "Food and groceries", max: 100_000, step: 500 },
+  { key: "shopping", label: "Shopping", max: 100_000, step: 500 },
+  { key: "fitness", label: "Gym and fitness", max: 50_000, step: 500 },
+  { key: "diningOut", label: "Dining out", max: 100_000, step: 500 },
+  { key: "medicines", label: "Medicines", max: 100_000, step: 500 },
+  { key: "water", label: "Water bill", max: 10_000, step: 100 },
+  { key: "houseMaintenance", label: "House maintenance", max: 100_000, step: 500 },
+  { key: "phone", label: "Phone bill", max: 10_000, step: 100 },
+  { key: "electricity", label: "Electricity bill", max: 50_000, step: 500 },
+  { key: "internet", label: "Internet bill", max: 10_000, step: 100 },
+  { key: "commute", label: "Daily commute (fuel or cab)", max: 100_000, step: 500 },
+  { key: "subscriptions", label: "Subscriptions (OTT, magazines, etc.)", max: 25_000, step: 100 },
+  { key: "householdStaff", label: "Cook, maid, driver, etc.", max: 100_000, step: 500 },
+];
+const MAX_MONTHLY_EXPENSE = EXPENSE_CATEGORIES.reduce((sum, category) => sum + category.max, 0);
 const MUTUAL_FUND_RETURN = 0.10;
 const FIXED_DEPOSIT_RETURN = 0.06;
 const REAL_ESTATE_RETURN = 0.08;
@@ -186,6 +209,36 @@ function RangeField({ label, value, onChange, min, max, step = 1000, prefix = "â
       />
     </div>
   );
+}
+
+function ExpenseBuilder({ saved, onSave, onClose }: { saved: ExpenseBreakdown; onSave: (breakdown: ExpenseBreakdown) => void; onClose: () => void }) {
+  const [draft, setDraft] = useState<ExpenseBreakdown>(saved);
+  const interactedFieldsRef = useRef(new Set<ExpenseKey>());
+  const total = Object.values(draft).reduce((sum, value) => sum + value, 0);
+  return <BottomSheet title="Break down monthly expenses" onClose={onClose}>
+    <div className="expense-builder-total" aria-live="polite">
+      <span>Total monthly expenses</span>
+      <strong>{inr(total, false)}</strong>
+    </div>
+    <div className="expense-builder-fields">
+      {EXPENSE_CATEGORIES.map((category) => <RangeField
+        key={category.key}
+        label={category.label}
+        value={draft[category.key]}
+        min={0}
+        max={category.max}
+        step={category.step}
+        prefix=""
+        onInteract={() => {
+          if (interactedFieldsRef.current.has(category.key)) return;
+          interactedFieldsRef.current.add(category.key);
+          track("expense_field_interact", { expense_category: category.key });
+        }}
+        onChange={(value) => setDraft((current) => ({ ...current, [category.key]: value }))}
+      />)}
+    </div>
+    <button className="primary-button sheet-action expense-save" onClick={() => onSave(draft)}>Save expenses</button>
+  </BottomSheet>;
 }
 
 function AgeWheel({ age, onChange }: { age: number; onChange: (age: number) => void }) {
@@ -540,6 +593,7 @@ export default function Home() {
   const [dependents, setDependents] = useState<Dependents>(DEFAULT_DEPENDENTS);
   const [dependantEntries, setDependantEntries] = useState<DependantEntry[]>([]);
   const [loan, setLoan] = useState<Loan>(DEFAULT_LOAN);
+  const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown>(DEFAULT_EXPENSE_BREAKDOWN);
   const [chartExpanded, setChartExpanded] = useState(false);
   const [selectedAge, setSelectedAge] = useState<number | null>(null);
   const [targetAge, setTargetAge] = useState<number | null>(null);
@@ -823,8 +877,8 @@ export default function Home() {
               {wizardStep === 3 && <>
                 <h1>Your monthly income &amp; expenditure</h1>
                 <RangeField label="Income" value={details.monthlyIncome} min={0} max={2_000_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyIncome: value })} />
-                <RangeField label="Expenditure" value={details.monthlyExpense} min={0} max={1_000_000} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyExpense: value })} />
-                <button className="wizard-link" onClick={() => setSheet("help")}>Help figure out my expenses</button>
+                <RangeField label="Expenditure" value={details.monthlyExpense} min={0} max={MAX_MONTHLY_EXPENSE} step={5_000} prefix="" onChange={(value) => setDetails({ ...details, monthlyExpense: value })} />
+                <button className="wizard-link" onClick={() => { track("expense_drawer_open", { source: "monthly_cash_flow" }); setSheet("help"); }}>Help figure out my expenses</button>
               </>}
               {wizardStep === 4 && <>
                 <h1>Add details about your dependants</h1>
@@ -1063,10 +1117,13 @@ export default function Home() {
           <button className="sheet-option" onClick={nativeShare}><Share2 size={21} /><span><b>Share from your phone</b><small>Use your deviceâ€™s share menu</small></span></button>
         </BottomSheet>}
 
-        {sheet === "help" && <BottomSheet title="What does this show?" onClose={() => setSheet(null)}>
-          <div className="help-copy"><p>Green bars show your projected investible corpus. Red bars show what you may spend each year.</p><p>Enter your current finances to estimate when your investments could support your lifestyle without a salary.</p><p>This is an educational planning tool, not financial advice.</p></div>
-          <button className="primary-button sheet-action" onClick={() => setSheet(null)}>Got it</button>
-        </BottomSheet>}
+        {sheet === "help" && <ExpenseBuilder saved={expenseBreakdown} onClose={() => setSheet(null)} onSave={(breakdown) => {
+          const total = Object.values(breakdown).reduce((sum, value) => sum + value, 0);
+          setExpenseBreakdown(breakdown);
+          setDetails((current) => ({ ...current, monthlyExpense: total }));
+          track("expense_breakdown_saved", { populated_categories: Object.values(breakdown).filter((value) => value > 0).length });
+          setSheet(null);
+        }} />}
       </section>
     </main>
   );
